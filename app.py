@@ -16,7 +16,7 @@ st.set_page_config(
     page_title="🏊 Pool Attendance App",
     page_icon="🏊",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # ─── Costanti ────────────────────────────────────────────────────────────────
@@ -98,48 +98,77 @@ st.markdown("""
         padding-left: 0.6rem !important;
         padding-right: 0.6rem !important;
     }
+    /* Nascondi sidebar e il suo toggle su mobile: usiamo la bottom nav */
+    [data-testid="stSidebar"]        { display: none !important; }
     [data-testid="collapsedControl"] { display: none !important; }
-    button[kind="header"] { display: none !important; }
+    section[data-testid="stSidebarUserContent"] { display: none !important; }
 }
 
-/* ══ BOTTOM NAVIGATION BAR ══ */
+/* ══ BOTTOM NAVIGATION BAR (solo mobile) ══ */
 #mobile-bottom-nav {
-    position: fixed;
-    bottom: 0; left: 0; right: 0;
-    z-index: 99999;
-    background: #005f9e;
-    display: none;
-    align-items: stretch;
-    box-shadow: 0 -2px 12px rgba(0,0,0,0.3);
-    border-top: 1px solid rgba(255,255,255,0.12);
+    display: none; /* nascosto di default, flex su mobile */
 }
+
 @media (max-width: 768px) {
-    #mobile-bottom-nav { display: flex !important; }
+    /* Mostra la barra */
+    #mobile-bottom-nav {
+        display: flex !important;
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        z-index: 99999;
+        background: #005f9e;
+        box-shadow: 0 -2px 12px rgba(0,0,0,0.3);
+        border-top: 1px solid rgba(255,255,255,0.12);
+        padding: 0;
+        gap: 0;
+    }
+
+    /* Ogni colonna Streamlit dentro la barra occupa spazio uguale */
+    #mobile-bottom-nav > div[data-testid="stHorizontalBlock"] {
+        width: 100% !important;
+        gap: 0 !important;
+        padding: 0 !important;
+    }
+    #mobile-bottom-nav > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+        padding: 0 !important;
+        flex: 1 !important;
+    }
+
+    /* Wrapper di ogni bottone nav */
+    .bnav-wrap {
+        width: 100%;
+    }
+    .bnav-wrap button {
+        background: transparent !important;
+        color: rgba(255,255,255,0.7) !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 6px 2px 8px !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        white-space: pre-line !important;
+        line-height: 1.4 !important;
+        min-height: 58px !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+    }
+    .bnav-wrap button:hover,
+    .bnav-wrap button:focus {
+        background: rgba(255,255,255,0.1) !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+    /* Voce attiva evidenziata in giallo */
+    .bnav-active button {
+        color: #FFD700 !important;
+        border-top: 3px solid #FFD700 !important;
+    }
 }
-.bnav-item {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 7px 2px 9px;
-    cursor: pointer;
-    border: none;
-    background: transparent;
-    color: rgba(255,255,255,0.65);
-    gap: 2px;
-    transition: background 0.15s;
-    -webkit-tap-highlight-color: transparent;
-    outline: none;
-}
-.bnav-item:active { background: rgba(255,255,255,0.12); }
-.bnav-item.active {
-    color: #FFD700 !important;
-    border-top: 3px solid #FFD700;
-    padding-top: 4px;
-}
-.bnav-icon  { font-size: 20px; line-height: 1.1; }
-.bnav-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.03em; color: inherit; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -310,11 +339,12 @@ def init_session():
 # ═══════════════════════════════════════════════════════════════════
 
 def render_bottom_nav():
-    """Barra di navigazione fissa in basso — visibile solo su mobile via CSS."""
+    """
+    Bottom nav bar per mobile: bottoni Streamlit reali stilizzati via CSS
+    in modo da sembrare una barra fissa in basso. Niente JS custom.
+    """
     page     = st.session_state.current_page
     is_admin = st.session_state.is_admin
-
-    def a(p): return "active" if page == p else ""
 
     items = [
         ("classifica", "🏆", "Classifica"),
@@ -325,30 +355,25 @@ def render_bottom_nav():
         items.append(("admin", "⚙️", "Admin"))
     items.append(("_logout", "🚪", "Esci"))
 
-    buttons_html = ""
-    for key, icon, label in items:
-        buttons_html += (
-            f'<button class="bnav-item {a(key)}" '
-            f'onclick="window.location.search=\'?nav={key}\'">'
-            f'<span class="bnav-icon">{icon}</span>'
-            f'<span class="bnav-label">{label}</span>'
-            f'</button>'
-        )
-
-    st.markdown(
-        f'<div id="mobile-bottom-nav">{buttons_html}</div>',
-        unsafe_allow_html=True
-    )
-
-    # Leggi parametro dalla URL e cambia pagina
-    nav = st.query_params.get("nav", None)
-    if nav and nav != page:
-        st.query_params.clear()
-        if nav == "_logout":
-            logout()
-        else:
-            st.session_state.current_page = nav
-        st.rerun()
+    # Contenitore fisso in basso (visibile solo su mobile via CSS già definito)
+    st.markdown('<div id="mobile-bottom-nav">', unsafe_allow_html=True)
+    cols = st.columns(len(items))
+    for i, (key, icon, label) in enumerate(items):
+        active_style = "bnav-active" if page == key else ""
+        with cols[i]:
+            # Il bottone usa una classe CSS custom per lo stile
+            st.markdown(
+                f'<div class="bnav-wrap {active_style}" data-nav="{key}">',
+                unsafe_allow_html=True
+            )
+            if st.button(f"{icon}\n{label}", key=f"bnav_{key}", use_container_width=True):
+                if key == "_logout":
+                    logout()
+                else:
+                    st.session_state.current_page = key
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def render_sidebar():
