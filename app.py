@@ -384,33 +384,48 @@ def page_classifica():
 
     sorted_teams = sorted(teams.values(), key=lambda t: t.get("total_score", 0), reverse=True)
     medals = {0: "🥇", 1: "🥈", 2: "🥉"}
-    rank_class = {0: "rank-1", 1: "rank-2", 2: "rank-3"}
+    bg_colors = {0: "#FFFDE7", 1: "#F5F5F5", 2: "#FFF3E0"}
+    border_colors = {0: "#FFD700", 1: "#C0C0C0", 2: "#CD7F32"}
+
+    max_score = max((t.get("total_score", 0) for t in sorted_teams), default=1) or 1
 
     for i, team in enumerate(sorted_teams):
         medal = medals.get(i, f"#{i+1}")
-        rclass = rank_class.get(i, "")
-        photo_html = ""
-        photo_b64 = get_team_photo_b64(team.get("photo_path"))
-        if photo_b64:
-            photo_html = f'<img src="{photo_b64}" style="width:60px;height:60px;border-radius:50%;object-fit:cover;margin-right:15px;border:3px solid #0077BE;">'
-
+        score = team.get("total_score", 0)
         members = team.get("members", [])
         members_str = ", ".join(m["name"] for m in members) if members else "Nessun membro"
+        bg = bg_colors.get(i, "#FFFFFF")
+        border = border_colors.get(i, "#0077BE")
 
-        st.markdown(f"""
-        <div class="team-card {rclass}">
-            <div style="display:flex;align-items:center;justify-content:space-between;">
-                <div style="display:flex;align-items:center;">
-                    {photo_html}
-                    <div>
-                        <div style="font-size:1.4em;font-weight:bold;">{medal} {team['name']}</div>
-                        <div style="color:#666;font-size:0.9em;">👥 {members_str}</div>
-                    </div>
-                </div>
-                <div class="score-badge">⭐ {team.get('total_score', 0)} pt</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        with st.container():
+            # Riga principale: foto + info + punteggio
+            photo_b64 = get_team_photo_b64(team.get("photo_path"))
+            col_photo, col_info, col_score = st.columns([1, 5, 2])
+
+            with col_photo:
+                if photo_b64:
+                    st.markdown(
+                        f'<img src="{photo_b64}" style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:3px solid {border};">',
+                        unsafe_allow_html=True
+                    )
+                else:
+                    st.markdown(f"<div style='font-size:2.5em;text-align:center;'>🏊</div>", unsafe_allow_html=True)
+
+            with col_info:
+                st.markdown(f"### {medal} {team['name']}")
+                st.caption(f"👥 {members_str}")
+
+            with col_score:
+                st.markdown(
+                    f"<div style='background:linear-gradient(135deg,#0077BE,#00A8E8);color:white;"
+                    f"border-radius:50px;padding:10px 18px;text-align:center;"
+                    f"font-size:1.3em;font-weight:bold;margin-top:8px;'>⭐ {score} pt</div>",
+                    unsafe_allow_html=True
+                )
+
+            # Barra di progresso
+            st.progress(score / max_score)
+            st.markdown("---")
 
 
 # ── Calendario ──────────────────────────────────────────────────────
@@ -615,24 +630,29 @@ def page_squadre():
 
                 if st.session_state.is_admin:
                     with st.form(f"add_member_{team_id}"):
-                        col_a, col_b, col_c = st.columns([3, 2, 1])
-                        with col_a:
-                            new_member = st.text_input("Nuovo membro", key=f"nm_{team_id}", label_visibility="collapsed", placeholder="Nome membro")
-                        with col_b:
-                            new_role = st.selectbox("Ruolo", ["membro", "capitano", "vice"], key=f"nr_{team_id}", label_visibility="collapsed")
-                        with col_c:
-                            if st.form_submit_button("➕"):
-                                if new_member:
-                                    if any(m["name"] == new_member for m in members):
-                                        st.error("Membro già presente")
-                                    else:
-                                        teams[team_id]["members"].append({
-                                            "name": new_member,
-                                            "role": new_role,
-                                            "joined_at": datetime.now().isoformat()
-                                        })
-                                        save_teams(teams)
-                                        st.rerun()
+                        st.markdown("**➕ Aggiungi membro**")
+                        new_member = st.text_input("Nome membro", placeholder="Es. Mario Rossi")
+                        new_role = st.selectbox("Ruolo", ["membro", "capitano", "vice"])
+                        if st.form_submit_button("Aggiungi", type="primary", use_container_width=True):
+                            if new_member.strip():
+                                # Ricarica dati freschi dal file per evitare sovrascritture
+                                fresh_teams = load_teams()
+                                current_members = fresh_teams.get(team_id, {}).get("members", [])
+                                if any(m["name"].lower() == new_member.strip().lower() for m in current_members):
+                                    st.error("❌ Membro già presente in questa squadra.")
+                                else:
+                                    current_members.append({
+                                        "name": new_member.strip(),
+                                        "role": new_role,
+                                        "joined_at": datetime.now().isoformat()
+                                    })
+                                    fresh_teams[team_id]["members"] = current_members
+                                    fresh_teams[team_id]["updated_at"] = datetime.now().isoformat()
+                                    save_teams(fresh_teams)
+                                    st.success(f"✅ {new_member.strip()} aggiunto!")
+                                    st.rerun()
+                            else:
+                                st.error("❌ Inserisci un nome valido.")
 
             # Elimina squadra
             if st.session_state.is_admin:
